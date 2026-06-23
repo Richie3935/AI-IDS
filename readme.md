@@ -1,308 +1,186 @@
-# AI-Powered Intrusion Detection System (IDS)
+# AI-Powered Intrusion Detection System (IDS) - Version 3
 
-A modular, production-quality foundation for a **Hybrid AI-Powered IDS**
-built with Python 3.11+ and Scapy.  Version 1 implements live packet
-capture and real-time traffic statistics — the ingestion and observation
-layer on which all future AI/ML detection modules will be built.
+A modular Python IDS built with Scapy. Version 3 includes live packet
+capture, real-time traffic statistics, and a rule-based detection engine
+for common reconnaissance and flood patterns.
 
----
+## Project Structure
 
-## Architecture
-
-```
+```text
 AI_IDS/
-│
-├── main.py            ← Entry point, CLI, AIIDS application class
-├── packet_capture.py  ← PacketCapture engine (Scapy wrapper)
-├── traffic_stats.py   ← TrafficStats module (counters + reporting)
-├── requirements.txt   ← Python dependencies
-└── README.md          ← This file
+|
+├── main.py
+├── packet_capture.py
+├── traffic_stats.py
+├── detection/
+│   ├── __init__.py
+│   ├── config.py
+│   └── rule_engine.py
+├── requirements.txt
+└── README.md
 ```
-
-### Module interaction
-
-```
-┌──────────────────────────────────────────────────────────┐
-│                         main.py                          │
-│  ┌─────────────────────┐   ┌──────────────────────────┐  │
-│  │   PacketCapture     │──▶│      TrafficStats        │  │
-│  │  (packet_capture.py)│   │   (traffic_stats.py)     │  │
-│  └─────────────────────┘   └──────────────────────────┘  │
-│         │                                                 │
-│         ▼  (future extension points)                      │
-│  ┌─────────────────────────────────────────────────┐     │
-│  │  Rule Engine │ MySQL Logger │ Flask Dashboard    │     │
-│  │  Flow Gen    │ ML Classifier                     │     │
-│  └─────────────────────────────────────────────────┘     │
-└──────────────────────────────────────────────────────────┘
-```
-
----
 
 ## Features
 
-### Packet Capture Module (`packet_capture.py`)
-- Live network packet capture via Scapy's `sniff(store=False)`
-- Extracts: Source IP, Destination IP, Protocol (TCP/UDP/ICMP), Packet Length, Ports, TCP Flags, TTL
-- Clean fixed-width per-packet console output with colour-coded protocol labels
-- Graceful handling of malformed / non-IP frames
-- `_on_packet()` hook and `register_callback()` for attaching future modules
-- Frozen `PacketInfo` dataclass — thread-safe, JSON-serialisable
+- Packet sniffer using Scapy
+- Real-time traffic statistics with thread-safe counters
+- Rule-based detection engine
+- Port scan detection
+- TCP SYN flood detection
+- ICMP flood detection
+- Console alerts with timestamp, source IP, attack type, severity, and details
+- Configurable thresholds in `detection/config.py`
+- CLI overrides for common detection thresholds
+- Logging and exception handling around packet capture, callbacks, and rules
 
-### Traffic Statistics Module (`traffic_stats.py`)
-- Thread-safe real-time counters using `threading.Lock`
-- Tracks: Total / TCP / UDP / ICMP / Other packets, Total bytes
-- Per-IP top-talker tracking (bounded by `top_n` to prevent memory growth)
-- Formatted statistics table printed every N seconds (configurable)
-- `get_snapshot()` returns an immutable `TrafficCounters` dataclass
-- `_on_report()` hook for pushing stats to DB, dashboard, or ML pipeline
-- Context-manager support (`with TrafficStats() as stats:`)
+## Detection Logic
 
----
+### Port Scan Detection
+
+The rule engine tracks destination ports contacted by each source IP in a
+sliding time window. If a source contacts at least
+`port_scan_unique_ports` unique destination ports within
+`port_scan_window_seconds`, an alert is generated.
+
+Default: 10 unique destination ports in 60 seconds.
+
+### SYN Flood Detection
+
+The engine monitors TCP packets with SYN set and ACK not set. For each
+source IP, it counts SYN packets in a sliding time window. If the count
+meets or exceeds `syn_flood_packet_threshold`, an alert is generated.
+
+Default: 100 SYN packets in 10 seconds.
+
+### ICMP Flood Detection
+
+The engine tracks ICMP packets per source IP in a sliding time window. If
+the count meets or exceeds `icmp_flood_packet_threshold`, an alert is
+generated.
+
+Default: 50 ICMP packets in 10 seconds.
+
+### Alert Cooldowns
+
+Each attack type/source IP pair has a cooldown to avoid printing the same
+alert continuously during a sustained attack. Cooldowns are configured in
+`detection/config.py`.
 
 ## Requirements
 
-| Requirement | Minimum version |
-|-------------|----------------|
-| Python      | 3.11            |
-| Scapy       | 2.5.0           |
+- Python 3.11+
+- Scapy 2.5.0+
+- Administrator/root privileges for live packet capture
 
-### System dependencies
+Install dependencies:
 
-**Linux (Debian/Ubuntu)**
-```bash
-sudo apt-get update
-sudo apt-get install python3-dev libpcap-dev python3-pip
-```
-
-**Linux (Fedora/RHEL)**
-```bash
-sudo dnf install python3-devel libpcap-devel python3-pip
-```
-
-**macOS**
-```bash
-# libpcap ships with Xcode Command Line Tools; install if missing:
-xcode-select --install
-# or via Homebrew:
-brew install libpcap
-```
-
-**Windows**
-1. Download and install [Npcap](https://npcap.com/) — choose "WinPcap API-compatible mode".
-2. Run all commands in an Administrator PowerShell or CMD window.
-
----
-
-## Installation
-
-### 1. Clone / download the project
-```bash
-git clone https://github.com/your-org/AI_IDS.git
-cd AI_IDS
-```
-
-### 2. Create and activate a virtual environment (recommended)
-```bash
-python3 -m venv .venv
-
-# Linux / macOS
-source .venv/bin/activate
-
-# Windows (PowerShell)
-.venv\Scripts\Activate.ps1
-```
-
-### 3. Install Python dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
----
+On Windows, install Npcap from [https://npcap.com/](https://npcap.com/)
+and run the terminal as Administrator.
 
 ## Usage
 
-> **Important:** Raw packet capture requires elevated privileges.
+Basic capture:
 
-### Basic capture (default interface, all traffic)
 ```bash
-sudo python main.py
+python main.py
 ```
 
-### Capture on a specific interface
+Capture on a specific interface:
+
 ```bash
-sudo python main.py -i eth0
-sudo python main.py -i en0      # macOS
+python main.py -i eth0
 ```
 
-### Apply a BPF capture filter
+Capture only TCP traffic:
+
 ```bash
-sudo python main.py -i eth0 -f "tcp"
-sudo python main.py -i eth0 -f "tcp port 80 or tcp port 443"
-sudo python main.py -i eth0 -f "not arp"
+python main.py -f "tcp"
 ```
 
-### Stop after N packets
+Stop after 500 packets:
+
 ```bash
-sudo python main.py -i eth0 -c 500
+python main.py -c 500
 ```
 
-### Change the statistics report interval
+Disable per-packet display while keeping stats and alerts:
+
 ```bash
-sudo python main.py --interval 30
+python main.py --no-display
 ```
 
-### Suppress per-packet output (stats-only mode)
+Write logs to a file:
+
 ```bash
-sudo python main.py --no-display
+python main.py --log-level INFO --log-file ids.log
 ```
 
-### Enable debug logging and write to a log file
+Tune rule thresholds for one run:
+
 ```bash
-sudo python main.py --log-level DEBUG --log-file ids.log
+python main.py --port-scan-window 30 --port-scan-ports 8
+python main.py --syn-window 5 --syn-threshold 50
+python main.py --icmp-window 5 --icmp-threshold 25
 ```
 
-### Full CLI reference
-```
-usage: AI-IDS [-h] [-i IFACE] [-f BPF] [-c N] [--no-display]
-              [--interval SEC] [--top-n N]
-              [--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
-              [--log-file PATH]
+Disable rule alerts:
 
-Capture options:
-  -i, --interface IFACE   Network interface (default: system default)
-  -f, --filter BPF        BPF filter string
-  -c, --count N           Stop after N packets (0 = unlimited)
-  --no-display            Suppress per-packet output
-
-Statistics options:
-  --interval SEC          Stats report interval in seconds (default: 10)
-  --top-n N               Number of top-talker IPs to show (default: 5)
-
-Logging options:
-  --log-level LEVEL       DEBUG | INFO | WARNING | ERROR | CRITICAL
-  --log-file PATH         Write logs to file
+```bash
+python main.py --disable-rules
 ```
 
----
+## Alert Format
 
-## Sample Output
-
-```
-╔══════════════════════════════════════════════════════════╗
-║          AI-Powered Intrusion Detection System           ║
-║                       v1.0.0                            ║
-╠══════════════════════════════════════════════════════════╣
-║  Interface  : eth0                                      ║
-║  BPF Filter : none (capture all)                        ║
-║  Pkt Limit  : unlimited                                 ║
-║  Stats Every: 10s                                       ║
-╚══════════════════════════════════════════════════════════╝
-
-[*] Capturing packets on eth0 — Ctrl+C to stop
-
-TIME         SRC IP             DST IP             PROTO    LEN   SPORT   DPORT  FLAGS
-────────────────────────────────────────────────────────────────────────────────
-12:00:01.234 192.168.1.10       142.250.80.78      TCP      74B      52432     443  A
-12:00:01.235 142.250.80.78      192.168.1.10       TCP      66B        443   52432  A
-12:00:01.240 192.168.1.10       8.8.8.8            UDP      73B      49152      53  —
-12:00:01.241 8.8.8.8            192.168.1.10       UDP      89B         53   49152  —
-12:00:01.510 192.168.1.1        192.168.1.10       ICMP     84B          —       —  —
-
-╔══════════════════════════════════════════════════════════╗
-║          REAL-TIME TRAFFIC STATISTICS                    ║
-║  Snapshot: 2025-09-01 12:00:11                          ║
-╠══════════════════════════════════════════════════════════╣
-║  Total Packets  : 142                                   ║
-║  Total Bytes    : 89.4 KB                               ║
-╠══════════════════════════════════════════════════════════╣
-║  TCP   Packets  :     98 ( 69.0%)                       ║
-║  UDP   Packets  :     31 ( 21.8%)                       ║
-║  ICMP  Packets  :      8 (  5.6%)                       ║
-║  Other Packets  :      5 (  3.5%)                       ║
-╠══════════════════════════════════════════════════════════╣
-║  Top Source IPs:                                        ║
-║    192.168.1.10           87 pkts                       ║
-║    142.250.80.78          34 pkts                       ║
-║    8.8.8.8                21 pkts                       ║
-╚══════════════════════════════════════════════════════════╝
+```text
+[ALERT] 2026-06-23 18:30:00 | Source=192.168.1.50 | Type=Port Scan | Severity=HIGH | 10 unique destination ports contacted within 60s
 ```
 
----
+Each alert includes:
 
-## Extension Guide
+- Timestamp
+- Source IP
+- Attack type
+- Severity
+- Detection details
 
-The codebase is designed as a platform.  Each future module plugs in
-without modifying the core capture / stats files.
+## Configuration
 
-### Adding a Rule-Based Detection Engine
+Thresholds live in `detection/config.py`:
+
 ```python
-# rules.py
-from packet_capture import PacketCapture, PacketInfo
-
-def port_scan_rule(info: PacketInfo) -> None:
-    if info.protocol == "TCP" and info.flags == "S":
-        print(f"[ALERT] SYN packet from {info.src_ip} → {info.dport}")
-
-# main.py — register after creating PacketCapture
-capture.register_callback(port_scan_rule)
+DetectionConfig(
+    port_scan_window_seconds=60,
+    port_scan_unique_ports=10,
+    syn_flood_window_seconds=10,
+    syn_flood_packet_threshold=100,
+    icmp_flood_window_seconds=10,
+    icmp_flood_packet_threshold=50,
+)
 ```
 
-### Adding a MySQL Logger
-```python
-# db_logger.py — subclass TrafficStats and override _on_report()
-class DBTrafficStats(TrafficStats):
-    def _on_report(self, snapshot):
-        db.insert(snapshot.as_dict())
-```
+Use conservative defaults in production and tune thresholds to match
+normal traffic patterns in your environment. Very low thresholds can
+produce false positives on busy networks.
 
-### Adding a Flask Dashboard
-Mount a Flask app in a separate thread; expose a `/stats` endpoint that
-calls `stats.get_snapshot()` and returns `jsonify(snapshot.as_dict())`.
-For live updates use Flask-SocketIO and emit from `_on_report()`.
+## Cybersecurity Notes
 
-### Adding ML Detection
-```python
-# ml_detector.py
-from packet_capture import PacketInfo
+- Run packet capture only on networks and systems where you have explicit
+  authorization.
+- Prefer least privilege and use elevated permissions only for capture.
+- Keep logs protected because they can contain sensitive IP metadata.
+- Treat this rule engine as a baseline detection layer, not a replacement
+  for full enterprise monitoring.
 
-class MLDetector:
-    def __call__(self, info: PacketInfo) -> None:
-        features = extract_features(info)
-        label    = self.model.predict([features])[0]
-        if label == 1:
-            print(f"[ML ALERT] Anomaly detected: {info.src_ip}")
+## Architecture
 
-capture.register_callback(MLDetector())
-```
+`PacketCapture` parses Scapy packets into immutable `PacketInfo` objects.
+`TrafficStats` updates counters for every packet. `RuleEngine` is
+registered as a packet callback and evaluates each packet independently
+using thread-safe sliding windows.
 
----
-
-## Design Decisions
-
-| Decision | Rationale |
-|----------|-----------|
-| `store=False` in Scapy sniff | Prevents packet buffer from growing unbounded |
-| `frozen=True` on `PacketInfo` | Thread-safe sharing; prevents accidental mutation |
-| `threading.Lock` in TrafficStats | Sniffer and timer run on separate threads |
-| Daemon threads for the timer | JVM-style: timer won't block interpreter exit |
-| `defaultdict(int)` for IP tallies | O(1) increment, no KeyError on first occurrence |
-| Bounded `top_n` for IP tracking | Prevents memory growth in long-running sessions |
-| Hook methods vs inheritance | Allows composition without modifying core classes |
-
----
-
-## Roadmap
-
-- [x] **v1.0** — Packet Capture + Traffic Statistics (this release)
-- [ ] **v1.1** — Rule-Based Detection Engine (threshold / signature rules)
-- [ ] **v1.2** — MySQL / SQLite Logging
-- [ ] **v1.3** — Flask Real-Time Dashboard (Chart.js + SSE)
-- [ ] **v1.4** — NetFlow / IPFIX Flow Generation
-- [ ] **v2.0** — ML-Based Anomaly Detection (Isolation Forest / LSTM)
-
----
-
-## License
-
-MIT — see `LICENSE` for details.
+This keeps capture, statistics, and detection modular, so future database,
+dashboard, or ML modules can attach through the same callback pattern.

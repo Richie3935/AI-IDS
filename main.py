@@ -45,6 +45,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from detection import DetectionConfig, RuleEngine
 from packet_capture import PacketCapture
 from traffic_stats  import TrafficStats
 
@@ -99,7 +100,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         prog="AI-IDS",
         description=(
             "AI-Powered Intrusion Detection System — "
-            "live packet capture + real-time traffic statistics"
+            "live packet capture, traffic statistics, and rule detection"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
@@ -156,6 +157,56 @@ Examples:
         help="Number of top-talker IPs to display (default: 5)",
     )
 
+    # Rule engine options
+    rules = parser.add_argument_group("Rule engine options")
+    rules.add_argument(
+        "--disable-rules",
+        action="store_true",
+        help="Disable rule-based intrusion detection alerts",
+    )
+    rules.add_argument(
+        "--port-scan-window",
+        type=int,
+        default=DetectionConfig.port_scan_window_seconds,
+        metavar="SEC",
+        help="Port scan detection window in seconds",
+    )
+    rules.add_argument(
+        "--port-scan-ports",
+        type=int,
+        default=DetectionConfig.port_scan_unique_ports,
+        metavar="N",
+        help="Unique destination ports required to alert on a port scan",
+    )
+    rules.add_argument(
+        "--syn-window",
+        type=int,
+        default=DetectionConfig.syn_flood_window_seconds,
+        metavar="SEC",
+        help="SYN flood detection window in seconds",
+    )
+    rules.add_argument(
+        "--syn-threshold",
+        type=int,
+        default=DetectionConfig.syn_flood_packet_threshold,
+        metavar="N",
+        help="SYN packets per source required to alert",
+    )
+    rules.add_argument(
+        "--icmp-window",
+        type=int,
+        default=DetectionConfig.icmp_flood_window_seconds,
+        metavar="SEC",
+        help="ICMP flood detection window in seconds",
+    )
+    rules.add_argument(
+        "--icmp-threshold",
+        type=int,
+        default=DetectionConfig.icmp_flood_packet_threshold,
+        metavar="N",
+        help="ICMP packets per source required to alert",
+    )
+
     # Logging options
     log = parser.add_argument_group("Logging options")
     log.add_argument(
@@ -208,6 +259,19 @@ class AIIDS:
             packet_count=args.count,
             display_packets=not args.no_display,
         )
+        self._rule_engine: RuleEngine | None = None
+
+        if not args.disable_rules:
+            rule_config = DetectionConfig(
+                port_scan_window_seconds=args.port_scan_window,
+                port_scan_unique_ports=args.port_scan_ports,
+                syn_flood_window_seconds=args.syn_window,
+                syn_flood_packet_threshold=args.syn_threshold,
+                icmp_flood_window_seconds=args.icmp_window,
+                icmp_flood_packet_threshold=args.icmp_threshold,
+            )
+            self._rule_engine = RuleEngine(rule_config)
+            self._capture.register_callback(self._rule_engine)
 
         # Register graceful-shutdown handlers
         signal.signal(signal.SIGINT,  self._handle_shutdown)
@@ -284,7 +348,7 @@ class AIIDS:
         banner = f"""
 ╔══════════════════════════════════════════════════════════╗
 ║          AI-Powered Intrusion Detection System           ║
-║                       v1.0.0                            ║
+║                       v3.0.0                            ║
 ╠══════════════════════════════════════════════════════════╣
 ║  Interface  : {iface:<41}║
 ║  BPF Filter : {filt:<41}║
@@ -294,8 +358,8 @@ class AIIDS:
 ║  Modules Active:                                        ║
 ║    ✔ Packet Capture (Scapy)                             ║
 ║    ✔ Traffic Statistics                                 ║
+║    ✔ Rule-Based Detection                               ║
 ║  Planned Extensions:                                    ║
-║    ○ Rule-Based Detection                               ║
 ║    ○ MySQL Logging                                      ║
 ║    ○ Flask Dashboard                                    ║
 ║    ○ Flow Generation                                    ║
