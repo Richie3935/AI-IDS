@@ -217,7 +217,8 @@ class PacketCapture:
         if not callable(fn):
             raise TypeError(f"Callback must be callable, got {type(fn)}")
         self._extra_callbacks.append(fn)
-        logger.debug("Registered packet callback: %s", fn.__name__)
+        callback_name = getattr(fn, "__name__", fn.__class__.__name__)
+        logger.debug("Registered packet callback: %s", callback_name)
 
     @property
     def captured_count(self) -> int:
@@ -265,9 +266,10 @@ class PacketCapture:
                 try:
                     cb(info)
                 except Exception as cb_exc:             # pragma: no cover
+                    callback_name = getattr(cb, "__name__", cb.__class__.__name__)
                     logger.warning(
                         "Callback %s raised an exception: %s",
-                        cb.__name__, cb_exc
+                        callback_name, cb_exc
                     )
 
         except Exception as exc:
