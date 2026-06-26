@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+    <div class="col-lg-7">
+        <div class="card h-100">
+            <div class="card-header">Attack Counts</div>
+            <div class="card-body">
+                <canvas id="attackChart" height="140"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card h-100">
+            <div class="card-header">Traffic Statistics</div>
+            <div class="card-body">
+                <canvas id="trafficChart" height="140"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Top Sources</div>
+            <ul class="list-group list-group-flush">
+                {% for ip, count in stats.get("top_sources", {}).items() %}
+                <li class="list-group-item d-flex justify-content-between">
+                    <span>{{ ip }}</span><strong>{{ count }}</strong>
+                </li>
+                {% else %}
+                <li class="list-group-item text-muted">No source traffic snapshot available.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Top Destinations</div>
+            <ul class="list-group list-group-flush">
+                {% for ip, count in stats.get("top_destinations", {}).items() %}
+                <li class="list-group-item d-flex justify-content-between">
+                    <span>{{ ip }}</span><strong>{{ count }}</strong>
+                </li>
+                {% else %}
+                <li class="list-group-item text-muted">No destination traffic snapshot available.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const attackCounts = {{ attack_counts | tojson }};
+const trafficStats = {{ stats | tojson }};
+
+new Chart(document.getElementById("attackChart"), {
+    type: "bar",
+    data: {
+        labels: attackCounts.map((row) => row.attack_type),
+        datasets: [{
+            label: "Alerts",
+            data: attackCounts.map((row) => row.total),
+            backgroundColor: "#0d6efd"
+        }]
+    },
+    options: { responsive: true, plugins: { legend: { display: false } } }
+});
+
+new Chart(document.getElementById("trafficChart"), {
+    type: "doughnut",
+    data: {
+        labels: ["TCP", "UDP", "ICMP", "Other"],
+        datasets: [{
+            data: [
+                trafficStats.tcp_packets || 0,
+                trafficStats.udp_packets || 0,
+                trafficStats.icmp_packets || 0,
+                trafficStats.other_packets || 0
+            ],
+            backgroundColor: ["#0d6efd", "#198754", "#ffc107", "#6c757d"]
+        }]
+    },
+    options: { responsive: true }
+});
+</script>
+{% endblock %}

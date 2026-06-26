@@ -1,76 +1,50 @@
-# AI-Powered Intrusion Detection System (IDS) - Version 3
+# AI-Powered Intrusion Detection System (IDS)
 
-A modular Python IDS built with Scapy. Version 3 includes live packet
-capture, real-time traffic statistics, and a rule-based detection engine
-for common reconnaissance and flood patterns.
+A modular Python IDS built with Scapy. The system includes live packet
+capture, real-time traffic statistics, rule-based detection, persistent
+MySQL alert storage, and a Flask monitoring dashboard.
 
 ## Project Structure
 
 ```text
 AI_IDS/
 |
-├── main.py
-├── packet_capture.py
-├── traffic_stats.py
-├── detection/
-│   ├── __init__.py
-│   ├── config.py
-│   └── rule_engine.py
-├── requirements.txt
-└── README.md
+|-- main.py
+|-- packet_capture.py
+|-- traffic_stats.py
+|-- detection/
+|   |-- __init__.py
+|   |-- config.py
+|   `-- rule_engine.py
+|-- database/
+|   |-- __init__.py
+|   |-- mysql_handler.py
+|   `-- schema.sql
+|-- dashboard/
+|   |-- app.py
+|   |-- static/
+|   `-- templates/
+|-- requirements.txt
+`-- readme.md
 ```
 
 ## Features
 
-- Packet sniffer using Scapy
-- Real-time traffic statistics with thread-safe counters
-- Rule-based detection engine
-- Port scan detection
-- TCP SYN flood detection
-- ICMP flood detection
-- Console alerts with timestamp, source IP, attack type, severity, and details
-- Configurable thresholds in `detection/config.py`
-- CLI overrides for common detection thresholds
-- Logging and exception handling around packet capture, callbacks, and rules
-
-## Detection Logic
-
-### Port Scan Detection
-
-The rule engine tracks destination ports contacted by each source IP in a
-sliding time window. If a source contacts at least
-`port_scan_unique_ports` unique destination ports within
-`port_scan_window_seconds`, an alert is generated.
-
-Default: 10 unique destination ports in 60 seconds.
-
-### SYN Flood Detection
-
-The engine monitors TCP packets with SYN set and ACK not set. For each
-source IP, it counts SYN packets in a sliding time window. If the count
-meets or exceeds `syn_flood_packet_threshold`, an alert is generated.
-
-Default: 100 SYN packets in 10 seconds.
-
-### ICMP Flood Detection
-
-The engine tracks ICMP packets per source IP in a sliding time window. If
-the count meets or exceeds `icmp_flood_packet_threshold`, an alert is
-generated.
-
-Default: 50 ICMP packets in 10 seconds.
-
-### Alert Cooldowns
-
-Each attack type/source IP pair has a cooldown to avoid printing the same
-alert continuously during a sustained attack. Cooldowns are configured in
-`detection/config.py`.
+- Live packet capture using Scapy
+- Thread-safe traffic statistics
+- Rule-based detection for port scans, TCP SYN floods, and ICMP floods
+- MySQL alert persistence with connection pooling
+- Parameterized SQL queries
+- Graceful handling and logging of database failures
+- Flask dashboard with Bootstrap UI and Chart.js visualizations
+- Searchable alert history with attack type and severity filters
 
 ## Requirements
 
 - Python 3.11+
-- Scapy 2.5.0+
+- MySQL Server 8.0+ or compatible MySQL instance
 - Administrator/root privileges for live packet capture
+- Npcap on Windows: [https://npcap.com/](https://npcap.com/)
 
 Install dependencies:
 
@@ -78,10 +52,28 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-On Windows, install Npcap from [https://npcap.com/](https://npcap.com/)
-and run the terminal as Administrator.
+## MySQL Setup
 
-## Usage
+Create the database and alerts table:
+
+```bash
+mysql -u root -p < database/schema.sql
+```
+
+Configure the IDS and dashboard with environment variables:
+
+```bash
+set AI_IDS_DB_HOST=localhost
+set AI_IDS_DB_PORT=3306
+set AI_IDS_DB_USER=root
+set AI_IDS_DB_PASSWORD=your_password
+set AI_IDS_DB_NAME=ai_ids
+set AI_IDS_DB_POOL_SIZE=5
+```
+
+On Linux/macOS, use `export` instead of `set`.
+
+## Running the IDS
 
 Basic capture:
 
@@ -113,12 +105,6 @@ Disable per-packet display while keeping stats and alerts:
 python main.py --no-display
 ```
 
-Write logs to a file:
-
-```bash
-python main.py --log-level INFO --log-file ids.log
-```
-
 Tune rule thresholds for one run:
 
 ```bash
@@ -133,54 +119,67 @@ Disable rule alerts:
 python main.py --disable-rules
 ```
 
-## Alert Format
+## Running the Dashboard
+
+Start the IDS in one terminal, then start the dashboard in another:
+
+```bash
+python dashboard/app.py
+```
+
+Open:
 
 ```text
-[ALERT] 2026-06-23 18:30:00 | Source=192.168.1.50 | Type=Port Scan | Severity=HIGH | 10 unique destination ports contacted within 60s
+http://127.0.0.1:5000
 ```
 
-Each alert includes:
+The IDS writes the latest traffic counters to
+`dashboard/static/stats_snapshot.json` by default. To use a different path,
+point both processes at the same file:
 
-- Timestamp
-- Source IP
-- Attack type
-- Severity
-- Detection details
-
-## Configuration
-
-Thresholds live in `detection/config.py`:
-
-```python
-DetectionConfig(
-    port_scan_window_seconds=60,
-    port_scan_unique_ports=10,
-    syn_flood_window_seconds=10,
-    syn_flood_packet_threshold=100,
-    icmp_flood_window_seconds=10,
-    icmp_flood_packet_threshold=50,
-)
+```bash
+python main.py --stats-snapshot-file C:\tmp\ai_ids_stats.json
+set AI_IDS_STATS_FILE=C:\tmp\ai_ids_stats.json
+python dashboard/app.py
 ```
 
-Use conservative defaults in production and tune thresholds to match
-normal traffic patterns in your environment. Very low thresholds can
-produce false positives on busy networks.
+## Alert Storage
 
-## Cybersecurity Notes
+The `alerts` table stores:
 
-- Run packet capture only on networks and systems where you have explicit
-  authorization.
-- Prefer least privilege and use elevated permissions only for capture.
-- Keep logs protected because they can contain sensitive IP metadata.
-- Treat this rule engine as a baseline detection layer, not a replacement
-  for full enterprise monitoring.
+- `id`
+- `timestamp`
+- `source_ip`
+- `destination_ip`
+- `attack_type`
+- `severity`
+- `description`
+
+When the rule engine detects an attack, it emits the existing console/log
+alert and then calls `MySQLAlertRepository.insert_alert()`. The repository
+uses a MySQL connection pool and parameterized queries. If MySQL is down or
+temporarily unreachable, the error is logged and packet capture continues.
+
+## Dashboard Pages
+
+- Home: total packets captured, total alerts, active threats, and latest alerts
+- Alerts: full alert history with search, attack type filtering, and severity filtering
+- Statistics: attack counts, traffic counters, top talkers, and Chart.js charts
 
 ## Architecture
 
 `PacketCapture` parses Scapy packets into immutable `PacketInfo` objects.
-`TrafficStats` updates counters for every packet. `RuleEngine` is
-registered as a packet callback and evaluates each packet independently
-using thread-safe sliding windows.
+`TrafficStats` updates counters for every packet. `RuleEngine` is registered
+as a packet callback and evaluates each packet with thread-safe sliding
+windows.
 
-This keeps capture, statistics, and detection modular, so future database,
-dashboard, or ML modules can attach through the same callback pattern.
+The database module is attached to the existing rule-engine alert boundary.
+The dashboard reads MySQL alerts and the existing traffic statistics snapshot;
+it does not reimplement packet capture, traffic counting, or detection logic.
+
+## Cybersecurity Notes
+
+- Run packet capture only on networks and systems where you have authorization.
+- Use least privilege except where elevated capture permissions are required.
+- Protect logs and database records because they may contain sensitive IP metadata.
+- Treat the rule engine as a baseline detection layer, not a replacement for full enterprise monitoring.

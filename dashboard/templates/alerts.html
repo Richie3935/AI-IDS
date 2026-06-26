@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block content %}
+<form class="row g-3 mb-4" method="get">
+    <div class="col-md-5">
+        <input class="form-control" name="search" value="{{ filters.search }}" placeholder="Search IPs or descriptions">
+    </div>
+    <div class="col-md-3">
+        <select class="form-select" name="attack_type">
+            <option value="">All attack types</option>
+            {% for value in attack_types %}
+            <option value="{{ value }}" {% if filters.attack_type == value %}selected{% endif %}>{{ value }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select class="form-select" name="severity">
+            <option value="">All severities</option>
+            {% for value in severities %}
+            <option value="{{ value }}" {% if filters.severity == value %}selected{% endif %}>{{ value }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-2 d-grid">
+        <button class="btn btn-primary" type="submit">Filter</button>
+    </div>
+</form>
+
+<div class="card">
+    <div class="card-header">Alert History</div>
+    <div class="table-responsive">
+        <table class="table table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Time</th>
+                    <th>Source</th>
+                    <th>Destination</th>
+                    <th>Attack</th>
+                    <th>Severity</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for alert in alerts %}
+                <tr>
+                    <td>{{ alert.id }}</td>
+                    <td>{{ alert.timestamp }}</td>
+                    <td>{{ alert.source_ip }}</td>
+                    <td>{{ alert.destination_ip or "-" }}</td>
+                    <td>{{ alert.attack_type }}</td>
+                    <td><span class="badge severity">{{ alert.severity }}</span></td>
+                    <td>{{ alert.description }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="text-muted text-center py-4">No matching alerts found.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

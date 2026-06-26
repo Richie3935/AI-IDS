@@ -26,9 +26,10 @@ class Alert:
 
     timestamp: str
     source_ip: str
+    destination_ip: str | None
     attack_type: str
     severity: str
-    details: str
+    description: str
 
 
 class RuleEngine:
@@ -39,8 +40,13 @@ class RuleEngine:
     PacketCapture.register_callback().
     """
 
-    def __init__(self, config: DetectionConfig | None = None) -> None:
+    def __init__(
+        self,
+        config: DetectionConfig | None = None,
+        alert_repository=None,
+    ) -> None:
         self._config = config or DetectionConfig()
+        self._alert_repository = alert_repository
         self._lock = threading.Lock()
 
         self._port_attempts: dict[str, Deque[tuple[float, int]]] = defaultdict(deque)
@@ -84,7 +90,7 @@ class RuleEngine:
                     alerts.append(syn_flood_alert)
 
             elif protocol == "ICMP":
-                icmp_alert = self._detect_icmp_flood(src_ip, now)
+                icmp_alert = self._detect_icmp_flood(packet_info, src_ip, now)
                 if icmp_alert:
                     alerts.append(icmp_alert)
 
@@ -108,6 +114,7 @@ class RuleEngine:
 
         return self._build_alert_if_allowed(
             source_ip=src_ip,
+            destination_ip=getattr(packet_info, "dst_ip", None),
             attack_type="Port Scan",
             severity=self._config.port_scan_severity,
             cooldown_seconds=self._config.port_scan_alert_cooldown_seconds,
@@ -132,6 +139,7 @@ class RuleEngine:
 
         return self._build_alert_if_allowed(
             source_ip=src_ip,
+            destination_ip=getattr(packet_info, "dst_ip", None),
             attack_type="SYN Flood",
             severity=self._config.syn_flood_severity,
             cooldown_seconds=self._config.syn_flood_alert_cooldown_seconds,
@@ -142,7 +150,7 @@ class RuleEngine:
             ),
         )
 
-    def _detect_icmp_flood(self, src_ip: str, now: float) -> Alert | None:
+    def _detect_icmp_flood(self, packet_info, src_ip: str, now: float) -> Alert | None:
         packets = self._icmp_packets[src_ip]
         packets.append(now)
         self._trim_time_window(packets, now, self._config.icmp_flood_window_seconds)
@@ -152,6 +160,7 @@ class RuleEngine:
 
         return self._build_alert_if_allowed(
             source_ip=src_ip,
+            destination_ip=getattr(packet_info, "dst_ip", None),
             attack_type="ICMP Flood",
             severity=self._config.icmp_flood_severity,
             cooldown_seconds=self._config.icmp_flood_alert_cooldown_seconds,
@@ -165,6 +174,7 @@ class RuleEngine:
     def _build_alert_if_allowed(
         self,
         source_ip: str,
+        destination_ip: str | None,
         attack_type: str,
         severity: str,
         cooldown_seconds: int,
@@ -180,9 +190,10 @@ class RuleEngine:
         return Alert(
             timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             source_ip=source_ip,
+            destination_ip=destination_ip,
             attack_type=attack_type,
             severity=severity or self._config.default_alert_severity,
-            details=details,
+            description=details,
         )
 
     def _trim_port_window(self, attempts: Deque[tuple[float, int]], now: float) -> None:
@@ -199,13 +210,20 @@ class RuleEngine:
     def _emit_alert(self, alert: Alert) -> None:
         message = (
             f"[ALERT] {alert.timestamp} | Source={alert.source_ip} | "
-            f"Type={alert.attack_type} | Severity={alert.severity} | {alert.details}"
+            f"Type={alert.attack_type} | Severity={alert.severity} | "
+            f"{alert.description}"
         )
         print(message)
         logger.warning(
-            "Rule alert generated: source=%s attack_type=%s severity=%s details=%s",
+            "Rule alert generated: source=%s attack_type=%s severity=%s "
+            "description=%s",
             alert.source_ip,
             alert.attack_type,
             alert.severity,
-            alert.details,
+            alert.description,
         )
+        if self._alert_repository is not None:
+            try:
+                self._alert_repository.insert_alert(alert)
+            except Exception as exc:  # pragma: no cover - defensive boundary
+                logger.error("Alert persistence failed: %s", exc, exc_info=True)

@@ -34,6 +34,7 @@ Python : 3.11+
 """
 
 import argparse
+import json
 import logging
 import signal
 import sys
@@ -46,6 +47,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from detection import DetectionConfig, RuleEngine
+from database import MySQLAlertRepository
 from packet_capture import PacketCapture
 from traffic_stats  import TrafficStats
 
@@ -156,6 +158,12 @@ Examples:
         metavar="N",
         help="Number of top-talker IPs to display (default: 5)",
     )
+    stats.add_argument(
+        "--stats-snapshot-file",
+        default="dashboard/static/stats_snapshot.json",
+        metavar="PATH",
+        help="Write latest traffic stats snapshot for the dashboard",
+    )
 
     # Rule engine options
     rules = parser.add_argument_group("Rule engine options")
@@ -260,6 +268,8 @@ class AIIDS:
             display_packets=not args.no_display,
         )
         self._rule_engine: RuleEngine | None = None
+        self._alert_repository = MySQLAlertRepository()
+        self._install_stats_snapshot_hook()
 
         if not args.disable_rules:
             rule_config = DetectionConfig(
@@ -270,7 +280,10 @@ class AIIDS:
                 icmp_flood_window_seconds=args.icmp_window,
                 icmp_flood_packet_threshold=args.icmp_threshold,
             )
-            self._rule_engine = RuleEngine(rule_config)
+            self._rule_engine = RuleEngine(
+                rule_config,
+                alert_repository=self._alert_repository,
+            )
             self._capture.register_callback(self._rule_engine)
 
         # Register graceful-shutdown handlers
@@ -308,6 +321,24 @@ class AIIDS:
             self._shutdown(exit_code=1)
         else:
             self._shutdown(exit_code=0)
+
+    def _install_stats_snapshot_hook(self) -> None:
+        """Publish TrafficStats snapshots for the Flask dashboard."""
+        snapshot_path = Path(self._args.stats_snapshot_file)
+        if not snapshot_path.is_absolute():
+            snapshot_path = Path(__file__).resolve().parent / snapshot_path
+
+        def write_snapshot(snapshot) -> None:
+            try:
+                snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+                snapshot_path.write_text(
+                    json.dumps(snapshot.__dict__, indent=2),
+                    encoding="utf-8",
+                )
+            except OSError as exc:
+                self._logger.error("Failed to write stats snapshot: %s", exc)
+
+        self._stats._on_report = write_snapshot
 
     # ------------------------------------------------------------------
     # Shutdown
@@ -359,9 +390,9 @@ class AIIDS:
 ║    ✔ Packet Capture (Scapy)                             ║
 ║    ✔ Traffic Statistics                                 ║
 ║    ✔ Rule-Based Detection                               ║
+║    ✔ MySQL Alert Logging                                ║
+║    ✔ Flask Dashboard Data Feed                          ║
 ║  Planned Extensions:                                    ║
-║    ○ MySQL Logging                                      ║
-║    ○ Flask Dashboard                                    ║
 ║    ○ Flow Generation                                    ║
 ║    ○ ML-Based Detection                                 ║
 ╚══════════════════════════════════════════════════════════╝

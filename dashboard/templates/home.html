@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card metric-card">
+            <div class="card-body">
+                <div class="metric-label">Total Packets Captured</div>
+                <div class="metric-value">{{ total_packets }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card metric-card">
+            <div class="card-body">
+                <div class="metric-label">Total Alerts</div>
+                <div class="metric-value">{{ total_alerts }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card metric-card">
+            <div class="card-body">
+                <div class="metric-label">Active Threats</div>
+                <div class="metric-value">{{ active_threats }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">Latest Alerts</div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Source</th>
+                    <th>Destination</th>
+                    <th>Attack</th>
+                    <th>Severity</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for alert in latest_alerts %}
+                <tr>
+                    <td>{{ alert.timestamp }}</td>
+                    <td>{{ alert.source_ip }}</td>
+                    <td>{{ alert.destination_ip or "-" }}</td>
+                    <td>{{ alert.attack_type }}</td>
+                    <td><span class="badge severity">{{ alert.severity }}</span></td>
+                    <td>{{ alert.description }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="text-muted text-center py-4">No alerts recorded yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
