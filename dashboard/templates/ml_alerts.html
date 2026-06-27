@@ -1,6 +1,16 @@
 {% extends "base.html" %}
 
 {% block content %}
+<div class="d-flex align-items-center mb-3 gap-2">
+    <h5 class="mb-0">
+        ML-Generated Alerts
+        <span class="badge bg-info text-dark ms-1">v7 — AI Engine</span>
+    </h5>
+    <a href="{{ url_for('alerts') }}" class="btn btn-sm btn-outline-secondary ms-auto">
+        ← All Alerts
+    </a>
+</div>
+
 <form class="row g-3 mb-4" method="get">
     <div class="col-md-5">
         <input class="form-control" name="search" value="{{ filters.search }}"
@@ -25,29 +35,25 @@
         </select>
     </div>
     <div class="col-md-2 d-grid">
-        <button class="btn btn-primary" type="submit">Filter</button>
+        <button class="btn btn-info text-white" type="submit">Filter</button>
     </div>
 </form>
 
-<div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        Alert History
-        <a href="{{ url_for('ml_alerts') }}" class="btn btn-sm btn-outline-info">
-            ML Alerts only →
-        </a>
+<div class="card border-info">
+    <div class="card-header bg-info bg-opacity-10">
+        ML Alert History — classified by Random Forest model
     </div>
     <div class="table-responsive">
         <table class="table table-striped align-middle mb-0">
             <thead>
                 <tr>
                     <th>ID</th>
-                    <th>Time</th>
-                    <th>Source</th>
-                    <th>Destination</th>
-                    <th>Attack</th>
+                    <th>Timestamp</th>
+                    <th>Source IP</th>
+                    <th>Destination IP</th>
+                    <th>Attack Type</th>
                     <th>Severity</th>
                     <th>Confidence</th>
-                    <th>Engine</th>
                     <th>Description</th>
                 </tr>
             </thead>
@@ -58,30 +64,35 @@
                     <td class="text-nowrap">{{ alert.timestamp }}</td>
                     <td>{{ alert.source_ip }}</td>
                     <td>{{ alert.destination_ip or "-" }}</td>
-                    <td>{{ alert.attack_type }}</td>
+                    <td>
+                        <span class="fw-semibold">{{ alert.attack_type }}</span>
+                    </td>
                     <td><span class="badge severity">{{ alert.severity }}</span></td>
                     <td>
                         {% if alert.get('confidence') is not none %}
-                            <span class="badge bg-info text-dark">
-                                {{ "%.1f%%"|format(alert.confidence * 100) }}
-                            </span>
+                            {% set pct = (alert.confidence * 100)|round(1) %}
+                            {% if pct >= 90 %}
+                                <span class="badge bg-success">{{ pct }}%</span>
+                            {% elif pct >= 75 %}
+                                <span class="badge bg-warning text-dark">{{ pct }}%</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ pct }}%</span>
+                            {% endif %}
                         {% else %}
                             <span class="text-muted">—</span>
                         {% endif %}
                     </td>
-                    <td>
-                        {% if alert.get('ml_generated') %}
-                            <span class="badge bg-info text-dark">ML</span>
-                        {% else %}
-                            <span class="badge bg-secondary">Rule</span>
-                        {% endif %}
-                    </td>
-                    <td class="text-truncate" style="max-width:220px">{{ alert.description }}</td>
+                    <td class="text-truncate" style="max-width:280px">{{ alert.description }}</td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="9" class="text-muted text-center py-4">
-                        No matching alerts found.
+                    <td colspan="8" class="text-muted text-center py-5">
+                        <div class="mb-2">No ML-generated alerts yet.</div>
+                        <small>
+                            Make sure <code>ml/model.pkl</code> exists
+                            (run <code>python ml/train_model.py</code>)
+                            and the IDS has been running long enough to complete flows.
+                        </small>
                     </td>
                 </tr>
                 {% endfor %}

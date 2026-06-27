@@ -1,5 +1,5 @@
 # ============================================================
-# AI-Powered IDS — Python Dependencies
+# AI-Powered IDS — Python Dependencies (Version 7)
 # ============================================================
 # Install with:
 #   pip install -r requirements.txt
@@ -18,22 +18,17 @@
 # Core packet capture library
 scapy>=2.5.0
 
-# ── Planned extension dependencies (commented out until implemented) ────────
-
-# Rule engine / config
-# pyyaml>=6.0
-
-# MySQL logging
+# MySQL alert logging
 mysql-connector-python>=8.0
 
 # Flask dashboard
 flask>=3.0
 
-# Machine-learning pipeline
-# scikit-learn>=1.4
-# numpy>=1.26
-# pandas>=2.2
-# joblib>=1.3
+# Machine-learning pipeline (Version 7)
+scikit-learn>=1.4
+numpy>=1.26
+pandas>=2.2
+joblib>=1.3
 
 # Development / testing
 # pytest>=8.0

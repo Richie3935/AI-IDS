@@ -21,7 +21,7 @@ class DetectionConfig:
     syn_flood_alert_cooldown_seconds: int = 30
 
     icmp_flood_window_seconds: int = 10
-    icmp_flood_packet_threshold: int = 50
+    icmp_flood_packet_threshold: int = 10
     icmp_flood_alert_cooldown_seconds: int = 30
 
     default_alert_severity: str = "MEDIUM"

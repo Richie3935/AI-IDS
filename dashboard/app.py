@@ -1,9 +1,13 @@
 """
 dashboard.app - Flask monitoring dashboard for AI-IDS.
 
-The dashboard reads alerts from MySQL and traffic counters from the snapshot
-written by the existing TrafficStats module. It does not implement duplicate
-detection or packet-processing logic.
+Version 7 adds an /ml-alerts route that shows ML-generated alerts with
+confidence scores, and enriches the /statistics page with rule vs ML
+alert source counts.
+
+The dashboard reads alerts from MySQL and traffic counters from the
+snapshot written by the existing TrafficStats module.  It does not
+implement duplicate detection or packet-processing logic.
 """
 
 from __future__ import annotations
@@ -37,25 +41,26 @@ def create_app() -> Flask:
 
     @app.route("/")
     def home():
-        latest_alerts = repository.fetch_alerts(limit=5)
+        latest_alerts = repository.fetch_alerts_with_confidence(limit=5)
         stats = _load_stats_snapshot(stats_path)
         return render_template(
             "home.html",
             total_packets=stats.get("total_packets", 0),
             total_alerts=repository.count_alerts(),
             active_threats=repository.count_active_threats(),
+            ml_alerts=repository.count_ml_alerts(),
             latest_alerts=latest_alerts,
             db_available=repository.available,
         )
 
     @app.route("/alerts")
     def alerts():
-        search = request.args.get("search", "").strip()
+        search      = request.args.get("search", "").strip()
         attack_type = request.args.get("attack_type", "").strip()
-        severity = request.args.get("severity", "").strip()
+        severity    = request.args.get("severity", "").strip()
         return render_template(
             "alerts.html",
-            alerts=repository.fetch_alerts(
+            alerts=repository.fetch_alerts_with_confidence(
                 search=search or None,
                 attack_type=attack_type or None,
                 severity=severity or None,
@@ -71,14 +76,41 @@ def create_app() -> Flask:
             db_available=repository.available,
         )
 
+    @app.route("/ml-alerts")
+    def ml_alerts():
+        """Show only ML-engine-generated alerts with confidence scores."""
+        search      = request.args.get("search", "").strip()
+        attack_type = request.args.get("attack_type", "").strip()
+        severity    = request.args.get("severity", "").strip()
+        return render_template(
+            "ml_alerts.html",
+            alerts=repository.fetch_alerts_with_confidence(
+                search=search or None,
+                attack_type=attack_type or None,
+                severity=severity or None,
+                ml_only=True,
+                limit=None,
+            ),
+            attack_types=repository.distinct_values("attack_type"),
+            severities=repository.distinct_values("severity"),
+            filters={
+                "search": search,
+                "attack_type": attack_type,
+                "severity": severity,
+            },
+            db_available=repository.available,
+        )
+
     @app.route("/statistics")
     def statistics():
         stats = _load_stats_snapshot(stats_path)
-        attack_counts = repository.attack_counts()
+        attack_counts  = repository.attack_counts()
+        alert_sources  = repository.alert_source_counts()
         return render_template(
             "statistics.html",
             stats=stats,
             attack_counts=attack_counts,
+            alert_sources=alert_sources,
             db_available=repository.available,
         )
 

@@ -29,6 +29,22 @@ body {
     line-height: 1.2;
 }
 
+/* Override metric-value colour for info (ML) card */
+.border-info .metric-value {
+    color: #0dcaf0;
+}
+
 .severity {
     background: #212529;
+}
+
+/* Confidence badge colour overrides (supplement Bootstrap) */
+.confidence-high   { background-color: #198754 !important; }
+.confidence-medium { background-color: #ffc107 !important; color: #212529 !important; }
+.confidence-low    { background-color: #6c757d !important; }
+
+/* ML badge accent in the navbar */
+.nav-link .badge.bg-info {
+    font-size: 0.6rem;
+    vertical-align: middle;
 }

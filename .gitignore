@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 ml/completed_flows.csv
 dashboard/static/stats_snapshot.json
+datasets/
+ml/model.pkl

@@ -10,7 +10,9 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('home') }}">AI-IDS</a>
+            <a class="navbar-brand fw-bold" href="{{ url_for('home') }}">
+                <span class="text-info">AI</span>-IDS
+            </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -18,6 +20,10 @@
                 <div class="navbar-nav">
                     <a class="nav-link" href="{{ url_for('home') }}">Home</a>
                     <a class="nav-link" href="{{ url_for('alerts') }}">Alerts</a>
+                    <a class="nav-link" href="{{ url_for('ml_alerts') }}">
+                        ML Alerts
+                        <span class="badge bg-info text-dark ms-1">v7</span>
+                    </a>
                     <a class="nav-link" href="{{ url_for('statistics') }}">Statistics</a>
                 </div>
             </div>

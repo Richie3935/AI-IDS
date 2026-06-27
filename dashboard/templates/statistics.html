@@ -2,19 +2,30 @@
 
 {% block content %}
 <div class="row g-3 mb-4">
-    <div class="col-lg-7">
+    <div class="col-lg-5">
         <div class="card h-100">
             <div class="card-header">Attack Counts</div>
             <div class="card-body">
-                <canvas id="attackChart" height="140"></canvas>
+                <canvas id="attackChart" height="160"></canvas>
             </div>
         </div>
     </div>
-    <div class="col-lg-5">
+    <div class="col-lg-4">
         <div class="card h-100">
-            <div class="card-header">Traffic Statistics</div>
+            <div class="card-header">Traffic Protocol Split</div>
             <div class="card-body">
-                <canvas id="trafficChart" height="140"></canvas>
+                <canvas id="trafficChart" height="160"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3">
+        <div class="card h-100 border-info">
+            <div class="card-header bg-info bg-opacity-10">
+                Alert Sources
+                <span class="badge bg-info text-dark ms-1" style="font-size:0.65rem">v7</span>
+            </div>
+            <div class="card-body">
+                <canvas id="sourceChart" height="160"></canvas>
             </div>
         </div>
     </div>
@@ -27,7 +38,8 @@
             <ul class="list-group list-group-flush">
                 {% for ip, count in stats.get("top_sources", {}).items() %}
                 <li class="list-group-item d-flex justify-content-between">
-                    <span>{{ ip }}</span><strong>{{ count }}</strong>
+                    <span class="font-monospace small">{{ ip }}</span>
+                    <strong>{{ count }}</strong>
                 </li>
                 {% else %}
                 <li class="list-group-item text-muted">No source traffic snapshot available.</li>
@@ -41,7 +53,8 @@
             <ul class="list-group list-group-flush">
                 {% for ip, count in stats.get("top_destinations", {}).items() %}
                 <li class="list-group-item d-flex justify-content-between">
-                    <span>{{ ip }}</span><strong>{{ count }}</strong>
+                    <span class="font-monospace small">{{ ip }}</span>
+                    <strong>{{ count }}</strong>
                 </li>
                 {% else %}
                 <li class="list-group-item text-muted">No destination traffic snapshot available.</li>
@@ -56,18 +69,23 @@
 <script>
 const attackCounts = {{ attack_counts | tojson }};
 const trafficStats = {{ stats | tojson }};
+const alertSources = {{ alert_sources | tojson }};
 
 new Chart(document.getElementById("attackChart"), {
     type: "bar",
     data: {
-        labels: attackCounts.map((row) => row.attack_type),
+        labels: attackCounts.map(r => r.attack_type),
         datasets: [{
             label: "Alerts",
-            data: attackCounts.map((row) => row.total),
-            backgroundColor: "#0d6efd"
+            data: attackCounts.map(r => r.total),
+            backgroundColor: ["#dc3545", "#0dcaf0", "#ffc107", "#0d6efd", "#6610f2"]
         }]
     },
-    options: { responsive: true, plugins: { legend: { display: false } } }
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+    }
 });
 
 new Chart(document.getElementById("trafficChart"), {
@@ -76,12 +94,28 @@ new Chart(document.getElementById("trafficChart"), {
         labels: ["TCP", "UDP", "ICMP", "Other"],
         datasets: [{
             data: [
-                trafficStats.tcp_packets || 0,
-                trafficStats.udp_packets || 0,
-                trafficStats.icmp_packets || 0,
+                trafficStats.tcp_packets   || 0,
+                trafficStats.udp_packets   || 0,
+                trafficStats.icmp_packets  || 0,
                 trafficStats.other_packets || 0
             ],
             backgroundColor: ["#0d6efd", "#198754", "#ffc107", "#6c757d"]
+        }]
+    },
+    options: { responsive: true }
+});
+
+// Alert sources: Rule-based vs ML (v7)
+new Chart(document.getElementById("sourceChart"), {
+    type: "doughnut",
+    data: {
+        labels: ["Rule-Based", "ML Engine"],
+        datasets: [{
+            data: [
+                alertSources.rule_alerts || 0,
+                alertSources.ml_alerts   || 0
+            ],
+            backgroundColor: ["#6c757d", "#0dcaf0"]
         }]
     },
     options: { responsive: true }
