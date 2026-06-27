@@ -48,6 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from detection import DetectionConfig, RuleEngine
 from database import MySQLAlertRepository
+from ml import FlowGenerator
 from packet_capture import PacketCapture
 from traffic_stats  import TrafficStats
 
@@ -165,6 +166,34 @@ Examples:
         help="Write latest traffic stats snapshot for the dashboard",
     )
 
+    # Flow generation options
+    flows = parser.add_argument_group("Flow generation options")
+    flows.add_argument(
+        "--flow-timeout",
+        type=float,
+        default=60.0,
+        metavar="SEC",
+        help="Close flows after this many seconds of inactivity (default: 60)",
+    )
+    flows.add_argument(
+        "--flow-cleanup-interval",
+        type=float,
+        default=10.0,
+        metavar="SEC",
+        help="Inactive-flow cleanup interval in seconds (default: 10)",
+    )
+    flows.add_argument(
+        "--flow-csv",
+        default="ml/completed_flows.csv",
+        metavar="PATH",
+        help="CSV path for completed flow export on shutdown",
+    )
+    flows.add_argument(
+        "--disable-flow-export",
+        action="store_true",
+        help="Do not write completed flows to CSV on shutdown",
+    )
+
     # Rule engine options
     rules = parser.add_argument_group("Rule engine options")
     rules.add_argument(
@@ -267,6 +296,12 @@ class AIIDS:
             packet_count=args.count,
             display_packets=not args.no_display,
         )
+        self._flow_generator = FlowGenerator(
+            flow_timeout=args.flow_timeout,
+            cleanup_interval=args.flow_cleanup_interval,
+            auto_cleanup=True,
+        )
+        self._capture.register_callback(self._flow_generator)
         self._rule_engine: RuleEngine | None = None
         self._alert_repository = MySQLAlertRepository()
         self._install_stats_snapshot_hook()
@@ -357,6 +392,12 @@ class AIIDS:
         # Stop the periodic stats timer
         self._stats.stop()
 
+        # Close active flows before exporting so the CSV contains the final
+        # session data even when traffic stops just before shutdown.
+        self._flow_generator.stop(close_active=True)
+        if not self._args.disable_flow_export:
+            self._export_completed_flows()
+
         # Print a final summary before exiting
         self._print_final_report()
 
@@ -365,6 +406,21 @@ class AIIDS:
             self._capture.captured_count,
         )
         sys.exit(exit_code)
+
+    def _export_completed_flows(self) -> None:
+        """Write completed flow records for offline ML training/inference."""
+        flow_csv = Path(self._args.flow_csv)
+        if not flow_csv.is_absolute():
+            flow_csv = Path(__file__).resolve().parent / flow_csv
+
+        try:
+            rows = self._flow_generator.export_csv(flow_csv)
+        except OSError:
+            self._logger.error("Flow CSV export failed")
+            return
+
+        self._logger.info("Exported %d completed flows to %s", rows, flow_csv)
+        print(f"[*] Exported {rows} completed flows to {flow_csv}")
 
     # ------------------------------------------------------------------
     # Console output

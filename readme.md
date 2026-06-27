@@ -12,6 +12,10 @@ AI_IDS/
 |-- main.py
 |-- packet_capture.py
 |-- traffic_stats.py
+|-- ml/
+|   |-- __init__.py
+|   |-- flow_generator.py
+|   `-- feature_extractor.py
 |-- detection/
 |   |-- __init__.py
 |   |-- config.py
@@ -33,6 +37,9 @@ AI_IDS/
 - Live packet capture using Scapy
 - Thread-safe traffic statistics
 - Rule-based detection for port scans, TCP SYN floods, and ICMP floods
+- Flow generation for machine-learning feature pipelines
+- Automatic inactive-flow timeout and completed-flow storage
+- CSV export for completed flow records
 - MySQL alert persistence with connection pooling
 - Parameterized SQL queries
 - Graceful handling and logging of database failures
@@ -119,6 +126,29 @@ Disable rule alerts:
 python main.py --disable-rules
 ```
 
+Tune Version 6 flow generation:
+
+```bash
+python main.py --flow-timeout 60 --flow-cleanup-interval 10
+python main.py --flow-csv ml/completed_flows.csv
+python main.py --disable-flow-export
+```
+
+Completed flows are exported with these ML-ready columns:
+
+- `src_ip`
+- `dst_ip`
+- `src_port`
+- `dst_port`
+- `protocol`
+- `packet_count`
+- `byte_count`
+- `flow_duration`
+- `packets_per_second`
+- `bytes_per_second`
+- `start_time`
+- `end_time`
+
 ## Running the Dashboard
 
 Start the IDS in one terminal, then start the dashboard in another:
@@ -172,6 +202,13 @@ temporarily unreachable, the error is logged and packet capture continues.
 `TrafficStats` updates counters for every packet. `RuleEngine` is registered
 as a packet callback and evaluates each packet with thread-safe sliding
 windows.
+
+Version 6 adds `FlowGenerator`, which is also registered as a packet callback.
+It groups packets by source IP, destination IP, source port, destination port,
+and protocol. Active flows stay in a memory-efficient dictionary, inactive
+flows are closed automatically, and completed `FlowRecord` objects are stored
+in a bounded queue. `FeatureExtractor` converts those completed records into
+plain dictionaries for future ML model inference or training.
 
 The database module is attached to the existing rule-engine alert boundary.
 The dashboard reads MySQL alerts and the existing traffic statistics snapshot;
